@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- Khelifa Baizid, Oct 2015
+this node provides a transformation from the laser frame to the base_link frame and from the base_link frame to odom frame based on the /odometry topic
+-->
+
+<launch>
+
+  <node pkg="odometry_tf" type="odometry_tf" name="odometry_tf" output= "screen" >
+    <param name="odometry_topic_name" value="/bike/odom"/>
+    <param name="frame_id" value="/map"/>
+    <param name="child_frame_id" value="/odommm"/>
+  </node>
+
+</launch>
