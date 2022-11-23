@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- Khelifa Baizid, Oct 2015
+this node provides a transformation from the laser frame to the base_link frame and from the base_link frame to odom frame based on the /odometry topic
+-->
+
+<launch>
+
+  <node pkg="bicycle_pid_controller" type="bicycle_pid_controller" name="bicycle_pid_controller" output= "screen" >
+    <param name="command_topic_name" value="/cmd_vel"/>
+    <param name="imu_topic_name" value="/bike/imu"/>
+    <param name="joint_topic_name" value="/bike/joint_states"/>
+    <!-- for low speed kp: 10, ki: 0, kd:0.6 old6 0.2-->
+    <param name="Kp" value="5.5" />
+    <param name="Ki" value="0.0" />
+    <param name="Kd" value="0.16" />
+    <param name="Ka" value="1" />
+    <param name="V_DIFF" value="0.015" />
+    <param name="W_DIFF" value="0.007" />
+    <param name="THETA_COMP_DIFF" value="100" />
+    
+  </node>
+
+</launch>

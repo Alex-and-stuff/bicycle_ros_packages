@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="MPC_ros_node" type="MPC_ros_node" name="main" output= "screen" />
+</launch>

@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="balance_command_node" type="balance_command_node" name="main" output= "screen" />
+</launch>

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <node pkg="bicycle_lmi_controller" type="bicycle_lmi_controller" name="bicycle_lmi_controller" output= "screen" >
+    <param name="command_topic_name" value="/cmd_vel"/>
+    <param name="imu_topic_name" value="/bike/imu"/>
+    <param name="joint_topic_name" value="/bike/joint_states"/>
+    <!-- for low speed kp: 10, ki: 0, kd:0.6 old6 0.2-->
+    <!-- 266.1011 46.6233 -17.3143-->
+    <!--param name="K1" value="25.8319" /> 
+    <param name="K2" value="6.6856" />
+    <param name="K3" value="-0.8369" />
+    <param name="Ka" value="2.54" /-->
+    <param name="K1" value="25.1229" /> 
+    <param name="K2" value="5.2253" />
+    <param name="K3" value="-1.6359" />
+    <param name="Ka" value="2.54" />
+    <!--param name="K1" value="266.1011" /> 
+    <param name="K2" value="46.6233" />
+    <param name="K3" value="-17.3143" />
+    <param name="Ka" value="2.54" /-->
+    <!-- DD 0.015 -->
+    <param name="DELTA_DIFF" value="0.015" />
+    <param name="W_DIFF" value="0.01" />
+    <param name="THETA_COMP_DIFF" value="100" />
+    
+  </node>
+
+</launch>
