@@ -9,10 +9,15 @@
 
 #define WHEEL_R 0.325f
 #define GRAVITY 9.81f
-#define EPSILON 70
 #define L_B 1.023273f
-#define L_A 0.418087f
+// #define L_A 0.418087f
+#define L_A 0.35f
+//#define L_A 1.023273f
 #define dT 0.01f
+#define PI 3.141592653589f
+#define EPSILON 70*PI/180.0f
+#define DELTA_MAX 0.6f
+#define DELTA_MIN -0.6f
 
 // Global variables - Ros Param
 std::string command_topic_name;
@@ -96,13 +101,11 @@ int main(int argc, char** argv){
    
       vd.data = vehicle_output[0];
       wd.data = vehicle_output[1];
-      }
+    }
     /*if(control_flag == true && (double)joint_state.velocity[2] * WHEEL_R > 1.5){
       LMIControl(imu_data, command, joint_state, vehicle_orientation, vehicle_output);
       vd.data = vehicle_output[0];
-      wd.data = vehicle_output[1];
-    }
-    if(control_flag == true && (double)joint_state.velocity[2] * WHEEL_R < 1.5 && command.linear.x * WHEEL_R != 0){
+      wd.data = double pi = 3.14159265359;lag == true && (double)joint_state.velocity[2] * WHEEL_R < 1.5 && command.linear.x * WHEEL_R != 0){
       if(vd.data<=1.5){
         vd.data += 0.001;
         }
@@ -129,7 +132,7 @@ void LMIControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_
   double theta_dot = imu_data.angular_velocity.x;
   double a = imu_data.linear_acceleration.x;
   double v0 = (double)joint_state.velocity[2] * WHEEL_R;
-  double delta = (double)joint_state.position[1];
+  double delta = -(double)joint_state.position[1]; // CHANGED 11/28 The motor is installed oposite against the delta direction
   
   
   // Confine the wd difference to some designated value
@@ -138,14 +141,14 @@ void LMIControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_
   if(wd < (wd_old - W_DIFF)){wd = wd_old - W_DIFF;}
   wd_old = wd;
   
-  double delta_d = std::atan(L_B*wd/vd)/std::sin(EPSILON);
+  double delta_d = 1/std::sin(EPSILON)*std::atan(L_B*wd/vd);
   
   // LMI Control
   //double K[3] = {266.1011, 43.6233, -17.3143};
   double K[3] = {K1, K2, K3};
   double x[3] = {theta, theta_dot, delta};
-  double x_d[3] = {vd*vd*std::sin(EPSILON)/(-GRAVITY*L_B)*delta_d, 0, delta_d+delta};
-  double u_d = (vd/L_A)*delta_d;
+  double x_d[3] = {(-vd*vd*std::sin(EPSILON))/(GRAVITY*L_B)*delta_d, 0, delta_d};//delta};
+  double u_d = (vd/L_A)*delta_d;  // TEST downscale by alpha
   double u_bar = 0;
   double u = 0;
   
@@ -159,20 +162,33 @@ void LMIControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_
   u_bar = u + u_d;  
   
   // Perform LMI control (full state feedback)
-  static double u_bar_old = 0;
   static double delta_cmd_old = 0;
-  double acc_term = Ka*(vd-v0);
-  double delta_cmd = (delta_cmd_old + dT*u_bar)/(1+v0/L_A*dT+acc_term*dT);
-  double vel_cmd = vd / WHEEL_R;
-  
-  // Confine the steering command difference to some designated value
-  if(delta_cmd > (delta_cmd_old + DELTA_DIFF)){delta_cmd = delta_cmd_old + DELTA_DIFF;}
-  if(delta_cmd < (delta_cmd_old - DELTA_DIFF)){delta_cmd= delta_cmd_old - DELTA_DIFF;}
-  u_bar_old = u_bar;
+  double delta_cmd = (delta_cmd_old + dT*u_bar)/(1+v0/L_A*dT+Ka*(vd-v0)*dT);
   delta_cmd_old = delta_cmd;
+  // std::cout<< std::fixed << std::setprecision(3)<<"dc: "<<delta_cmd<<" dc_old "<<delta_cmd_old<<" ub "<<u_bar<<std::endl;
+
+  // static double delta_cmd_old = 0;
+  // static double u_bar_old = 0;
+  // double delta_cmd = u_bar_old*dT+(1-(v0/L_A+Ka*(vd-v0))*dT)*delta_cmd_old;
+  // delta_cmd_old = delta_cmd;
+  // u_bar_old = u_bar;
+
+
   
+
+  // Confine the steering command difference to some designated value
+  if(delta_cmd > DELTA_MAX){
+   delta_cmd = DELTA_MAX;
+  }
+  if(delta_cmd < DELTA_MIN){
+   delta_cmd = DELTA_MIN;
+  }
   
-  std::cout<<"vd: "<<vd<<" wd: "<<wd<<" theta: "<<theta<<" cmd: "<<vd*vd*std::sin(EPSILON)/(-GRAVITY*L_B)*delta_d<<" delta: "<<delta<<" delta_cmd: "<<delta_cmd<<" est a: "<<vd*vd*std::sin(EPSILON)/(-GRAVITY*L_B)*delta_d<<std::endl;
+  // std::cout<<"vd: "<<vd<<" wd: "<<wd<<" theta: "<<theta<<" cmd: "<<vd*vd*std::sin(EPSILON*(pi/180))/(-GRAVITY*L_B)*delta_d<<" delta: "<<delta<<" delta_cmd: "<<delta_cmd<<" est a: "<<vd*vd*std::sin(EPSILON*(pi/180))/(-GRAVITY*L_B)*delta_d<<std::endl;
+  
+  std::cout<< std::fixed << std::setprecision(3)<<"phi_dot: "<<std::tan(delta*std::sin(EPSILON)/L_B*v0)*std::cos(theta)<<" wd: "<<wd<<" delta: "<<delta<<" delta_d: "<<delta_d<<" cmd: "<<delta_cmd<<" theta: "<<theta<<" t_cmd: "<<(-vd*vd*std::sin(EPSILON))/(GRAVITY*L_B)*delta_d<<" u: "<<u_bar<<std::endl;
+  // std::cout<< std::fixed << std::setprecision(3)<<"x1_err: "<<x[0]<<" x2_err: "<<x[1]<<" x3_err: "<<x[2]<<" | "<<K[0]*x[0]<<" "<<K[1]*x[1]<<" "<<K[2]*x[2]<<" "<<std::endl;
+  double vel_cmd = vd / WHEEL_R;
   output[0] = vel_cmd;
   output[1] = delta_cmd;
 }

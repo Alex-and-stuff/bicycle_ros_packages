@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
 SET(CUDA_NVCC_FLAGS "-arch=sm_35" CACHE STRING "nvcc flags" FORCE)
 SET (CUDA_VERBOSE_BUILD ON CACHE BOOL "nvcc verbose" FORCE)
 SET(LIB_TYPE STATIC) 
-CUDA_ADD_LIBRARY(TestLib ${LIB_TYPE} src/kernel.cu)
+CUDA_ADD_LIBRARY(TestLib ${LIB_TYPE} src/kernel_expand.cu)
 
 catkin_package(
 )
@@ -21,7 +21,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-ADD_EXECUTABLE(MPC_ros_node src/main.cpp)
+ADD_EXECUTABLE(MPC_ros_node src/main_expand_map.cpp)
 ADD_DEPENDENCIES(MPC_ros_node TestLib)
 TARGET_LINK_LIBRARIES(MPC_ros_node
    ${catkin_LIBRARIES}

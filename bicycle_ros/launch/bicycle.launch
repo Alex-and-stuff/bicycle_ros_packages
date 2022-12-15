@@ -32,8 +32,8 @@
     <arg name="x" default="0"/>
     <arg name="y" default="0"/>
     <arg name="z" default="0.6"/>
-    <!--arg name="Y" default="-0.65"/-->
-    <arg name="Y" default="0.0"/>
+    <arg name="Y" default="-0.65"/>
+    <!--arg name="Y" default="0.0"/-->
     
     <!-- Robot Model -->
     <param name="robot_description" command="$(find xacro)/xacro $(find bicycle_ros)/urdf/bicycle.xacro ns:=/bike"/>

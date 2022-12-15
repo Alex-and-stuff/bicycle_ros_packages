@@ -122,7 +122,7 @@ int main(int argc, char **argv)
         output_cmd.vd += 0.01;
         output_cmd.wd -= 0.005;
       }
-      if(counter_control>6){
+      if(counter_control>7){
         output_cmd.vd = 0.0;
         output_cmd.wd = 0.0;
       }

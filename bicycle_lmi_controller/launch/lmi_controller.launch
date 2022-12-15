@@ -12,17 +12,30 @@
     <param name="K2" value="6.6856" />
     <param name="K3" value="-0.8369" />
     <param name="Ka" value="2.54" /-->
-    <param name="K1" value="25.1229" /> 
+    
+    <!--param name="K3" value="-1.6359" /-->
+    
+    <!--param name="K1" value="25.1229" /> 
     <param name="K2" value="5.2253" />
-    <param name="K3" value="-1.6359" />
+    <param name="K3" value="1.6359" /-->
+    
+    <param name="K1" value="32.4522" /> 
+    <param name="K2" value="7.0690" />
+    <param name="K3" value="0.0207*0.01" />
+    
+    <!--param name="K1" value="-32.4522" /> 
+    <param name="K2" value="-7.0690" />
+    <param name="K3" value="0.01*-0.0207" /-->
+    
     <param name="Ka" value="2.54" />
     <!--param name="K1" value="266.1011" /> 
     <param name="K2" value="46.6233" />
     <param name="K3" value="-17.3143" />
     <param name="Ka" value="2.54" /-->
-    <!-- DD 0.015 -->
-    <param name="DELTA_DIFF" value="0.015" />
-    <param name="W_DIFF" value="0.01" />
+    <!-- DD 0.015 WW 0.01-->
+    <!--Mx motor max speed 45[rev/min] at 12V = 4.71238[rad/s], cvrt to rad per 0.01s-->
+    <param name="DELTA_DIFF" value="0.04" />
+    <param name="W_DIFF" value="5" />
     <param name="THETA_COMP_DIFF" value="100" />
     
   </node>
