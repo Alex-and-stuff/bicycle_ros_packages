@@ -15,17 +15,29 @@
     
     <!--param name="K3" value="-1.6359" /-->
     
-    <!--param name="K1" value="25.1229" /> 
-    <param name="K2" value="5.2253" />
-    <param name="K3" value="1.6359" /-->
+<!--    <param name="K1" value="25.1229" /> -->
+<!--    <param name="K2" value="5.2253" />-->
+<!--    <param name="K3" value="1.6359" />-->
     
-    <param name="K1" value="32.4522" /> 
+    <!--param name="K1" value="32.4522" /> 
     <param name="K2" value="7.0690" />
-    <param name="K3" value="0.0207*0.01" />
+    <param name="K3" value="0.0207*0.01" /-->
     
-    <!--param name="K1" value="-32.4522" /> 
-    <param name="K2" value="-7.0690" />
-    <param name="K3" value="0.01*-0.0207" /-->
+    <!--param name="K1" value="27.3021" /> 
+    <param name="K2" value="5.1983" />
+    <param name="K3" value="-0.4204*0.01" /2022.12.20-->
+    
+<!--    <param name="K1" value="32.8939" /> -->
+<!--    <param name="K2" value="6.5065" />-->
+<!--    <param name="K3" value="-0.0010786" />-->
+
+<!--    <param name="K1" value="29.6212" /> -->
+<!--    <param name="K2" value="9.1605" />-->
+<!--    <param name="K3" value="-0.1089" />-->
+
+    <param name="K1" value="38.9562" /> 
+    <param name="K2" value="11.3425" />
+    <param name="K3" value="-0.000976" />
     
     <param name="Ka" value="2.54" />
     <!--param name="K1" value="266.1011" /> 

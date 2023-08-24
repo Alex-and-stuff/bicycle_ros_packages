@@ -27,6 +27,7 @@ sensor_msgs::JointState joint_state;
 
 // Predefine functions
 void PIDControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_msgs::JointState joint_state, double* orientation, double *output);
+void PIDControlold(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_msgs::JointState joint_state, double* orientation, double *output);
 void quaternion2RPY(sensor_msgs::Imu input, double *output);
 
 // Setup callback functions
@@ -92,10 +93,11 @@ int main(int argc, char** argv){
     std_msgs::Float64 vd;
     std_msgs::Float64 wd;
     vd.data = command.linear.x;
-    wd.data = command.angular.z;
+    wd.data = command.linear.y;
     
     if(command.linear.x * WHEEL_R > 1.5){
-      PIDControl(imu_data, command, joint_state, vehicle_orientation, vehicle_output);
+      PIDControlold(imu_data, command, joint_state, vehicle_orientation, vehicle_output);
+      // PIDControl(imu_data, command, joint_state, vehicle_orientation, vehicle_output);
    
       vd.data = vehicle_output[0];
       wd.data = vehicle_output[1];
@@ -113,24 +115,30 @@ int main(int argc, char** argv){
 void PIDControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_msgs::JointState joint_state, double* orientation, double *output){
   quaternion2RPY(imu_data, orientation);
   double theta_dot = imu_data.angular_velocity.x;
-  double vd = command.linear.x;
-  double wd = command.angular.z;
+  double vd = command.linear.x * WHEEL_R;
+  double wd = command.linear.y;
   double theta = orientation[0];
   double a = imu_data.linear_acceleration.x;
   
   double delta = (double)joint_state.position[1];
-  double v0 = (double)joint_state.velocity[2];
-  double delta_d = std::atan(L_B*wd/vd)/std::sin(EPSILON); 
+  double v0 = (double)joint_state.velocity[2] * WHEEL_R;
+  double delta_d = 1/std::sin(EPSILON)*std::atan(L_B*wd/vd);
   
   // Compute compensation tilt angle theta_comp (consider accelleration)
-  double theta_comp = -(L_A*std::sin(EPSILON)*vd*WHEEL_R)/(L_B*GRAVITY)*(vd*WHEEL_R/L_A+(Ka*(vd-v0)*WHEEL_R))*wd;
+  // double theta_comp = -(L_A*std::sin(EPSILON)*vd*WHEEL_R)/(L_B*GRAVITY)*(vd*WHEEL_R/L_A+(Ka*(vd-v0)*WHEEL_R))*wd;
+  double theta_comp = -(L_A*std::sin(EPSILON)*vd)/(L_B*GRAVITY)*(vd/L_A+(Ka*(vd-v0)))*wd;
   
   std::cout<<"PID: vd: "<<vd<<" wd: "<<wd<<" delta_d: "<<delta_d<< " comp: "<<theta_comp<<" theta: "<<theta<<" delta: "<<delta<<" est a: "<<Ka*(vd-v0)<<std::endl;
   
   // Perform PD control (feedback control)
   // double delta_cmd = Kp * (theta - Ki * theta_comp) + Kd * theta_dot + delta_d;
-  double delta_cmd = Kp * (theta-theta_comp) + Kd * theta_dot;
-  double vel_cmd = vd;
+  // double delta_cmd = Kp * (theta-theta_comp) + Kd * theta_dot;
+  // double delta_cmd = Kp * (theta) + Kd * theta_dot;
+  double delta_cmd = Kp * (theta) + Kd * theta_dot + delta_d;
+  if(abs(theta)>1.0){
+    delta_cmd = 0;
+  }
+  double vel_cmd = vd / WHEEL_R;
   
   output[0] = vel_cmd;
   output[1] = delta_cmd;
@@ -139,13 +147,13 @@ void PIDControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_
 void PIDControlold(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_msgs::JointState joint_state, double* orientation, double *output){
   quaternion2RPY(imu_data, orientation);
   double theta_dot = imu_data.angular_velocity.x;
-  double vd = command.linear.x;
-  double wd = command.angular.z;
+  double vd = command.linear.x* WHEEL_R;
+  double wd = command.linear.y;
   double theta = orientation[0];
   double a = imu_data.linear_acceleration.x;
   
   double delta = (double)joint_state.position[1];
-  double v0 = (double)joint_state.velocity[2];
+  double v0 = (double)joint_state.velocity[2]* WHEEL_R;
   
   
   // Confine the steering angle difference to some designated value
@@ -155,7 +163,7 @@ void PIDControlold(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sens
   wd_old = wd;*/
   //std::cout<<"wd: "<<wd<<" old: "<<wd_old<<std::endl;
   
-  double delta_d = std::atan(L_B*wd/vd)/std::sin(EPSILON); 
+  double delta_d = 1/std::sin(EPSILON)*std::atan(L_B*wd/vd);
   
   // Confine the steering angle difference to some designated value  
   /*static double vd_old = 0;
@@ -165,18 +173,23 @@ void PIDControlold(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sens
   
   
   // Compute compensation tilt angle theta_comp (consider accelleration)
-  double theta_comp = -(L_A*std::sin(EPSILON)*vd*WHEEL_R)/(L_B*GRAVITY)*(vd*WHEEL_R/L_A+(Ka*(vd-v0)*WHEEL_R))*wd;
+  double theta_comp = -(L_A*std::sin(EPSILON)*vd)/(L_B*GRAVITY)*(vd/L_A+(Ka*(vd-v0)))*wd;
   static double theta_comp_old = 0;
   if(theta_comp > (theta_comp_old + THETA_COMP_DIFF)){theta_comp = theta_comp_old + THETA_COMP_DIFF;}
   if(theta_comp < (theta_comp_old - THETA_COMP_DIFF)){theta_comp = theta_comp_old - THETA_COMP_DIFF;}
   theta_comp_old = theta_comp;
   
-  std::cout<<"vd: "<<vd<<" wd: "<<wd<<" delta_d: "<<delta_d<< " comp: "<<theta_comp<<" theta: "<<theta<<" delta: "<<delta<<" est a: "<<Ka*(vd-v0)<<std::endl;
+  // std::cout<<"vd: "<<vd<<" wd: "<<wd<<" delta_d: "<<delta_d<< " comp: "<<theta_comp<<" theta: "<<theta<<" delta: "<<delta<<" est a: "<<Ka*(vd-v0)<<std::endl;
   
   // Perform PD control (feedback control)
   // double delta_cmd = Kp * (theta - Ki * theta_comp) + Kd * theta_dot + delta_d;
-  double delta_cmd = Kp * (theta) + Kd * theta_dot + delta_d;
-  double vel_cmd = vd;
+  // double delta_cmd = Kp * (theta) + Kd * theta_dot + delta_d;
+  double delta_cmd = Kp * (theta - theta_comp) + Kd * theta_dot;
+  double vel_cmd = vd / WHEEL_R;
+  if(abs(theta)>0.8){
+    delta_cmd = 0;
+  }
+  std::cout<<"vd: "<<vd<<" wd: "<<wd<<" delta_d: "<<delta_d<< " comp: "<<theta_comp<<" theta: "<<theta<<" delta: "<<delta<<" cmd: "<<delta_cmd<<std::endl;
   
   output[0] = vel_cmd;
   output[1] = delta_cmd;

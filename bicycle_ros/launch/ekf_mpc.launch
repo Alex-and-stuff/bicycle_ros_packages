@@ -40,7 +40,6 @@
       
 </group>
 
-<node pkg="bike_viz" type="bike_viz" name="bike_viz_node" output= "screen" />
 
 <arg name="rvizconfig" default="$(find bicycle_ros)/launch/display.rviz"/>
 <node name="rviz" pkg="rviz" args="-d $(arg rvizconfig)" type="rviz" required="true"/>

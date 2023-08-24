@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+<!-- ===== Load in map ===== -->
+<!--<arg name="map_file" default="$(find bicycle_ros)/map/nthu_world.yaml"/>-->
+<arg name="map_file" default="$(find bicycle_ros)/map/nthu_world_rounded.yaml"/>
+<node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
+
+<!-- ===== TF transformations ===== -->
+<node pkg="tf" type="static_transform_publisher" name="tf_odom_bike" args="0 0 0.32 0 0 0 /bike/odom /bike/base_link 50"/>
+<node pkg="tf" type="static_transform_publisher" name="radar_baselink_0" args="0.8 -0.025 0.78 0 0 0 /bike/base_link ti_mmwave_0 100"/>
+<node pkg="tf" type="static_transform_publisher" name="tf_mmwave_baselink" args="0.8 -0.025 0.78 0 0 0 /bike/base_link /mmwave_baselink 100"/>
+
+
+<!-- ===== Arguments of initial state ===== -->
+<arg name="init_x" value="77.0"/>
+<arg name="init_y" value="-3.0"/>
+<arg name="init_phi" value="2.7"/>
+<arg name="STM_GPS" value="1"/>
+<arg name="USE_POS_BIAS" value="0"/>
+<arg name="PUB_GPS" value="1"/>
+<arg name="PUB_EKF" value="1"/>
+<arg name="RECORD_DATA" value="1"/>
+
+<!-- ===== Launch the kf tracker ===== -->
+<node pkg="multi_object_tracking_lidar" type="kf_tracker" name="kf_tracker" output="screen" />
+
+<!-- ===== Launch the EKF node ===== -->
+<!--<node pkg="px4_ekf" type="px4_ekf" name="px4_ekf_node" output= "screen">-->
+<!--  <param name="INIT_X" value="$(arg init_x)" /> -->
+<!--  <param name="INIT_Y" value="$(arg init_y)" /> -->
+<!--  <param name="INIT_PHI" value="$(arg init_phi)" /> -->
+<!--</node>-->
+
+  <!-- Place Model Into World With Namespace "obstacles" -->
+<!--  <group ns="/obstacle1">-->
+
+<!--    <param name="tf_prefix" value="/obstacle1" />-->
+<!--    -->
+<!--    <arg name="x" default="50"/>-->
+<!--    <arg name="y" default="12"/>-->
+
+<!--    <arg name="z" default="0.5"/>-->
+<!--    -->
+<!--    <node pkg="tf" type="static_transform_publisher" name="tf33" args="$(arg x) $(arg y) $(arg z) 0 0 0 /map /obstacle1/obstacle 5"/>-->
+<!--    -->
+
+<!--    <param name="robot_description" command="$(find xacro)/xacro $(find bicycle_ros)/urdf/obstacle.xacro ns:=/obstacle1"/>-->
+<!--    -->
+
+<!--    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" output="screen" args="-param robot_description -urdf -model obstacle1-->
+<!--    -x $(arg x) -y $(arg y) -z $(arg z)" />     -->
+<!--  </group>-->
+
+<!-- ===== Generate the bicycle model ===== -->
+<group ns="/bike">
+    <!-- IMPORTANT to add tf prefix -->
+    <param name="tf_prefix" value="/bike" />
+    
+    <!-- Set Arguments -->
+    <arg name="x" default="0"/>
+    <arg name="y" default="0"/>
+    <arg name="z" default="0.6"/>
+    <arg name="Y" default="-0.65"/>
+    <!--arg name="Y" default="0.0"/-->
+    
+    <!-- Robot Model -->
+    <param name="robot_description" command="$(find xacro)/xacro $(find bicycle_ros)/urdf/bicycle.xacro ns:=/bike"/>
+    
+    <!-- Spawn Robot Model -->
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" output="screen" args="-param robot_description -urdf -model bicycle 
+                -x $(arg x) -y $(arg y) -z $(arg z) -Y $(arg Y)" />        
+                
+<!--    <arg name="use_gui" default="false" />            -->
+<!--    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">-->
+<!--      <param name="/use_gui" value="$(arg use_gui)"/>-->
+<!--      <rosparam param="/source_list">[/joint_states]</rosparam>-->
+<!--    </node>-->
+    
+    <!-- Load Controllers -->
+    <rosparam file="$(find bicycle_ros)/config/controller2.yaml" command="load"/>
+
+    <!-- Controllers -->
+    <node name="controller_spawner" pkg="controller_manager" type="spawner"
+      respawn="false" output="screen" ns="/bike" args="--namespace=/bike 
+      joint_state_controller
+      front_fork_controller  
+      back_wheel_controller
+      --timeout 60">
+    </node>    
+    
+    
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
+      <remap from="/joint_states" to="/bike/joint_states"/>
+      <param name="publish_rate" type="double" value="200.0" />
+      <param name="tf_prefix" value="/bike" />
+    </node>
+    
+</group>
+
+<!-- ===== Launch the visualization node ===== -->
+<node pkg="bike_experiment_viz" type="bike_experiment_viz" name="bike_experiment_viz_node" output= "screen" >
+  <param name="INIT_X" value="$(arg init_x)" /> 
+  <param name="INIT_Y" value="$(arg init_y)" /> 
+  <param name="STM_GPS" value="$(arg STM_GPS)" /> 
+  <param name="USE_POS_BIAS" value="$(arg USE_POS_BIAS)" /> 
+  <param name="PUB_GPS" value="$(arg PUB_GPS)" /> 
+  <param name="PUB_EKF" value="$(arg PUB_EKF)" />
+  <param name="RECORD_DATA" value="$(arg RECORD_DATA)" />
+</node>
+
+
+<arg name="rvizconfig" default="$(find bike_experiment_viz)/launch/viz.rviz"/>
+<node name="rviz" pkg="rviz" args="-d $(arg rvizconfig)" type="rviz" required="true"/>
+</launch>

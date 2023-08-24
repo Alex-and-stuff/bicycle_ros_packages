@@ -10,12 +10,14 @@ this node provides a transformation from the laser frame to the base_link frame 
     <param name="imu_topic_name" value="/bike/imu"/>
     <param name="joint_topic_name" value="/bike/joint_states"/>
     <!-- for low speed kp: 10, ki: 0, kd:0.6 old6 0.2-->
-    <param name="Kp" value="6" />
+    <param name="Kp" value="5.5" />
     <param name="Ki" value="0.0" />
-    <param name="Kd" value="0.2" />
+    <param name="Kd" value="0.16" />
     <param name="Ka" value="1" />
-    <param name="V_DIFF" value="0.015" />
-    <param name="W_DIFF" value="0.007" />
+<!--    <param name="V_DIFF" value="0.015" />-->
+<!--    <param name="W_DIFF" value="0.007" />-->
+    <param name="V_DIFF" value="5" />
+    <param name="W_DIFF" value="5" />
     <param name="THETA_COMP_DIFF" value="100" />
     
   </node>

@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include <ctime>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -21,24 +21,45 @@ using namespace std;
 
 #define CONTROLSIZE   2				// Number of controls u = [vd,wd]
 #define STATESIZE     6				// Number of states   x = [x,y,phi,v0,theta,theta_dot,delta]
-#define T_HRZ         5.0f			// Prediction time horizon 3.2 (REMEMBER TO ALSO CHANGE MAIN.CPP)
+#define T_HRZ         3.0f			// Prediction time horizon 3.2 (REMEMBER TO ALSO CHANGE MAIN.CPP)
 #define F_STP		      20.0f			// Frequency of prediction (control freq) 20
 #define T_STP		      1/F_STP			// Period of prediction
 #define N_HRZ         T_HRZ*F_STP		// N steps in a time horizon
 #define K             1024            // K-rollout predictions
 #define V_MAX         2.5f			// Velocity command upper-bound
 #define V_MIN         1.8f			// Velocity command lower-bound
-#define W_MAX		      0.7f			// Angular acceleration command upper-bound
-#define W_MIN		      -0.7f			// Angular acceleration command lower-bound
-#define ROAD_WIDTH    2.0f			// Width of road (unit: m) 3.5 works
-#define LAMBDA        400.0f
+#define W_MAX		      1.0f			// Angular acceleration command upper-bound
+#define W_MIN		      -1.0f			// Angular acceleration command lower-bound
+#define ROAD_WIDTH    6.0f			// Width of road (unit: m) 3.5 works
+// #define LAMBDA        350.0f //350
 #define V_RAND_SCALAR 0.1f
-#define W_RAND_SCALAR 0.3f //0.5
-#define W_DIFF        5.0f//0.04f  //0.4
-#define SCALE_MODEL   0.72f//0.61f //0.72f
-#define RHO           0.05f//0.08f
+#define W_RAND_SCALAR 0.6f //0.5 // 0.6
+#define W_DIFF        5.0f //0.04f  //0.4
+#define SCALE_MODEL   1.0f //0.61f  //0.72f
+#define RHO           0.08f//0.08f
 #define DELTA_MAX     0.6f
 #define DELTA_MIN     -0.6f
+
+// #define K1            30.824f
+// #define K2            11.3638f
+// #define K3            0.000637f
+// #define K1            32.4522f
+// #define K2            7.0690f
+// #define K3            0.0207f
+// #define K1            32.8939f
+// #define K2            6.5065f
+// #define K3            -0.0010786f
+// #define K1            29.6212f
+// #define K2            9.1605f
+// #define K3            -0.1089f
+
+#define K1            38.9562f
+#define K2            11.3425f
+#define K3            -0.000976f
+
+// #define K1            42.3960f
+// #define K2            9.8507f
+// #define K3            -1.5682f
 
 #define FG_RAD        8.0f
 #define GH_RAD		    8.0f
@@ -46,9 +67,21 @@ using namespace std;
 #define IF_RAD        8.0f
 
 // good: 200 800 5 | 1 2 5 (W:1.1)
-#define OFF_ROAD_COST	  500.0f		// Penalty for leaving the road
-#define COLLISION_COST  300.0f		// Penalty for colliding into an obstacle 100  140
-#define TRACK_ERR_COST	20.0f		// Penalty for tracking error (parting from the middle) 3.0 3.0
+// 50 400 300 l350
+// #define OFF_ROAD_COST	  280.0f		//-100- // 300 Penalty for leaving the road
+// #define COLLISION_COST  100.0f		//-500- //200 80.0f Penalty for colliding into an obstacle 100  140
+// #define TRACK_ERR_COST	13.0f		//-100- //15.0f// Penalty for tracking error (parting from the middle) 3.0 3.0 20
+// #define OBS_SIZE        1.0f
+// #define LAMBDA        500.0f //350
+// #define OFF_ROAD_COST	  20.0f		//-100- // 300 Penalty for leaving the road
+// #define COLLISION_COST  300.0f		//-500- //200 80.0f Penalty for colliding into an obstacle 100  140
+// #define TRACK_ERR_COST	100.0f		//-100- //15.0f// Penalty for tracking error (parting from the middle) 3.0 3.0 20
+// #define OBS_SIZE        1.0f
+#define LAMBDA        300.0f //350
+#define OFF_ROAD_COST	  200.0f		//-100- // 300 Penalty for leaving the road
+#define COLLISION_COST  300.0f		//-500- //200 80.0f Penalty for colliding into an obstacle 100  140
+#define TRACK_ERR_COST	100.0f		//-100- //15.0f// Penalty for tracking error (parting from the middle) 3.0 3.0 20
+#define OBS_SIZE        1.0f
 
 
 struct Control {
@@ -137,17 +170,29 @@ __host__ __device__ State bicycleModel(State state, Control u) {
   float l_b     = 1.053;
   float g       = 9.81;
   float Ka      = 2.54;
+  float h       = 0.6;
 
-  float A[9] = {1.0232, 0.0504, 0, 
-                0.9326, 1.0232, 0,
-                0, 0, exp(-10*state.v0/79)};
+  // float A[9] = {1.0232, 0.0504, 0, 
+  //               0.9326, 1.0232, 0,
+  //               0, 0, exp(-10*state.v0/79)};
+  // float A[9] = {1.3713, 0.2507, 0, 
+  //             3.5127, 1.0176, 0,
+  //             0, 0, exp(-10*state.v0/79)};
 
-  float B[3] = {0.0017, 0.0670, -79*(exp(-10*state.v0/79)-1)/200/state.v0};
+  // float B[3] = {0.0017, 0.0670, -79*(exp(-10*state.v0/79)-1)/200/state.v0};
+  // float B[3] = {0.0283*state.v0, 0.098*state.v0, -79*(exp(-10*state.v0/79)-1)/200/state.v0};
+
+  float A[9] = {1,        T_STP,    0,
+                g/h*T_STP,    1,    0,
+                0,            0,  1-state.v0/l_a*T_STP};
+
+  float B[3] = {0, l_a*state.v0*sin(epsilon)*T_STP/l_b/h, T_STP};
 
   // Full state feedback to compute u_bar
   float delta_d   = 1/std::sin(epsilon)*std::atan(l_b*u.wd/u.vd);
   // float K_gain[3] = {25.1229, 5.2253, 0.016359};
-  float K_gain[3] = {32.4522, 7.0690, 0.0207};
+  // float K_gain[3] = {32.4522, 7.0690, 0.0207};
+  float K_gain[3] = {K1, K2, K3};
   float x[3]      = {state.theta, state.theta_dot, state.delta};
   float x_d[3]    = {(-u.vd*u.vd*std::sin(epsilon))/(g*l_b)*delta_d, 0, delta_d};
   float u_d       = (u.vd/l_a)*delta_d*SCALE_MODEL;
@@ -161,6 +206,7 @@ __host__ __device__ State bicycleModel(State state, Control u) {
     u_fb -= K_gain[i]*x[i]; 
   }
   u_bar = u_fb + u_d;
+  // u_bar = u_fb;
 
   // Obtain state[k+1]
   State state_next      = {0};
@@ -211,7 +257,8 @@ __host__ __device__ State bicycleModelConti(State state, Control u) {
 
   // Full state feedback to compute u_bar
   float delta_d   = 1/std::sin(epsilon)*std::atan(l_b*u.wd/u.vd);
-  float K_gain[3] = {-32.4522, -7.0690, -0.00207};
+  // float K_gain[3] = {-32.4522, -7.0690, -0.00207};
+  float K_gain[3] = {K1, K2, K3};
   float x[3]      = {state.theta, state.theta_dot, state.delta};
   float x_d[3]    = {(-u.vd*u.vd*std::sin(epsilon))/(g*l_b)*delta_d, 0, delta_d};
   float u_d       = (u.vd/l_a)*delta_d;
@@ -258,50 +305,50 @@ __device__ __host__ void clampingFcn(Control* u_in, float scale) {
   else if (u_in->wd < W_MIN*scale) { u_in->wd = W_MIN*scale; }
 }
 
-// __device__ float distanceFromTrack(float inner_f, float inner_g, float inner_h,
-//   float inner_i, Track* inner_fcn) {
-//   /*  Calculates the distance from the middle of a designated path 
-//     (Here, from the Tetragon imposing the road infront of the schools library)*/
+__device__ float distanceFromTrack_(float inner_f, float inner_g, float inner_h,
+  float inner_i, Track* inner_fcn) {
+  /*  Calculates the distance from the middle of a designated path 
+    (Here, from the Tetragon imposing the road infront of the schools library)*/
 
-//   float slope[] = { -inner_fcn[0].a, -inner_fcn[1].a, -inner_fcn[2].a, -inner_fcn[3].a };
-//   float distance = 0.0f;
-//   if (inner_f < 0 && inner_g < 0 && inner_h < 0 && inner_i > 0) {
-//     distance = fabs(fabs(inner_f) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[0])));
-//   }
-//   else if (inner_f < 0 && inner_g > 0 && inner_h < 0 && inner_i > 0) {
-//     distance = fabs(sqrtf(pow(inner_f, 2) + pow(inner_g, 2)) - 0.5 * ROAD_WIDTH);
-//   }
-//   else if (inner_f > 0 && inner_g > 0 && inner_h < 0 && inner_i > 0) {
-//     distance = fabs(fabs(inner_g) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[1])));
-//   }
-//   else if (inner_f > 0 && inner_g > 0 && inner_h > 0 && inner_i > 0) {
-//     distance = fabs(sqrtf(pow(inner_g, 2) + pow(inner_h, 2)) - 0.5 * ROAD_WIDTH);
-//   }
-//   else if (inner_f > 0 && inner_g < 0 && inner_h>0 && inner_i > 0) {
-//     distance = fabs(fabs(inner_h) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[2])));
-//   }
-//   else if (inner_f > 0 && inner_g < 0 && inner_h>0 && inner_i < 0) {
-//     distance = fabs(sqrtf(pow(inner_h, 2) + pow(inner_i, 2)) - 0.5 * ROAD_WIDTH);
-//   }
-//   else if (inner_f > 0 && inner_g < 0 && inner_h < 0 && inner_i < 0) {
-//     distance = fabs(fabs(inner_i) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[3])));
-//   }
-//   else if (inner_f > 0 && inner_g < 0 && inner_h < 0 && inner_i < 0) {
-//     distance = fabs(sqrtf(pow(inner_i, 2) + pow(inner_f, 2)) - 0.5 * ROAD_WIDTH);
-//   }
-//   else if (inner_f == 0 || inner_g == 0 || inner_h == 0 || inner_i == 0) {
-//     float inner_min = 0.0f;
-//     (fabs(inner_f) > fabs(inner_g)) ? inner_min = fabs(inner_g) : inner_min = fabs(inner_f);
-//     (inner_min > fabs(inner_h)) ? inner_min = fabs(inner_h) : inner_min = inner_min;
-//     (inner_min > fabs(inner_i)) ? inner_min = fabs(inner_i) : inner_min = inner_min;
-//     distance = inner_min - 0.5 * ROAD_WIDTH;
-//   }
-//   // if (distance > ROAD_WIDTH / 2) {
-//   //   distance = ROAD_WIDTH+1; // Important to set it to 2 instead of 0 to ensure the vehicle tracks the designated path
-//   // }
+  float slope[] = { -inner_fcn[0].a, -inner_fcn[1].a, -inner_fcn[2].a, -inner_fcn[3].a };
+  float distance = 0.0f;
+  if (inner_f < 0 && inner_g < 0 && inner_h < 0 && inner_i > 0) {
+    distance = fabs(fabs(inner_f) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[0])));
+  }
+  else if (inner_f < 0 && inner_g > 0 && inner_h < 0 && inner_i > 0) {
+    distance = fabs(sqrtf(pow(inner_f, 2) + pow(inner_g, 2)) - 0.5 * ROAD_WIDTH);
+  }
+  else if (inner_f > 0 && inner_g > 0 && inner_h < 0 && inner_i > 0) {
+    distance = fabs(fabs(inner_g) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[1])));
+  }
+  else if (inner_f > 0 && inner_g > 0 && inner_h > 0 && inner_i > 0) {
+    distance = fabs(sqrtf(pow(inner_g, 2) + pow(inner_h, 2)) - 0.5 * ROAD_WIDTH);
+  }
+  else if (inner_f > 0 && inner_g < 0 && inner_h>0 && inner_i > 0) {
+    distance = fabs(fabs(inner_h) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[2])));
+  }
+  else if (inner_f > 0 && inner_g < 0 && inner_h>0 && inner_i < 0) {
+    distance = fabs(sqrtf(pow(inner_h, 2) + pow(inner_i, 2)) - 0.5 * ROAD_WIDTH);
+  }
+  else if (inner_f > 0 && inner_g < 0 && inner_h < 0 && inner_i < 0) {
+    distance = fabs(fabs(inner_i) - 0.5 * ROAD_WIDTH / cosf(atanf(slope[3])));
+  }
+  else if (inner_f > 0 && inner_g < 0 && inner_h < 0 && inner_i < 0) {
+    distance = fabs(sqrtf(pow(inner_i, 2) + pow(inner_f, 2)) - 0.5 * ROAD_WIDTH);
+  }
+  else if (inner_f == 0 || inner_g == 0 || inner_h == 0 || inner_i == 0) {
+    float inner_min = 0.0f;
+    (fabs(inner_f) > fabs(inner_g)) ? inner_min = fabs(inner_g) : inner_min = fabs(inner_f);
+    (inner_min > fabs(inner_h)) ? inner_min = fabs(inner_h) : inner_min = inner_min;
+    (inner_min > fabs(inner_i)) ? inner_min = fabs(inner_i) : inner_min = inner_min;
+    distance = inner_min - 0.5 * ROAD_WIDTH;
+  }
+  if (distance > ROAD_WIDTH / 2) {
+    distance = ROAD_WIDTH; // Important to set it to 2 instead of 0 to ensure the vehicle tracks the designated path
+  }
 
-//   return distance;
-// }
+  return distance;
+}
 
 __device__ float pointToLineDist(float inner, Track line) {
 	float a = line.a;
@@ -314,21 +361,32 @@ __device__ float distanceFromTrack(float* inner, float* nominal, Track* inner_fc
 		(Here, from the Tetragon imposing the road infront of the schools library)*/
 
 	float slope[] = {-inner_fcn[0].a, -inner_fcn[1].a, -inner_fcn[2].a, -inner_fcn[3].a};
+  float distance = 0;
+  float OFF_ROAD_RENALTY = 0.0;
 
 	// Distance from the curves 
 	if (nominal[0] >= 0 && nominal[1] <= 0) {  // curve fg
+    // printf("%.3f\n", fabs(sqrtf((state->x - turn_circle_intersec[0].x) * (state->x - turn_circle_intersec[0].x)
+		// 	+ (state->y - turn_circle_intersec[0].y) * (state->y - turn_circle_intersec[0].y)) - FG_RAD));
 		return fabs(sqrtf((state->x - turn_circle_intersec[0].x) * (state->x - turn_circle_intersec[0].x)
 			+ (state->y - turn_circle_intersec[0].y) * (state->y - turn_circle_intersec[0].y)) - FG_RAD);
-	}
+    // if(distance > ROAD_WIDTH/2){distance += }
+  }
 	if (nominal[2] >= 0 && nominal[3] >= 0) {  // curve gh
+    // printf("%.3f\n", fabs(sqrtf((state->x - turn_circle_intersec[1].x) * (state->x - turn_circle_intersec[1].x)
+		// 	+ (state->y - turn_circle_intersec[1].y) * (state->y - turn_circle_intersec[1].y)) - GH_RAD));
 		return fabs(sqrtf((state->x - turn_circle_intersec[1].x) * (state->x - turn_circle_intersec[1].x)
 			+ (state->y - turn_circle_intersec[1].y) * (state->y - turn_circle_intersec[1].y)) - GH_RAD);
 	}
 	if (nominal[4] <= 0 && nominal[5] >= 0) {  // curve hi
+    // printf("%.3f\n", fabs(sqrtf((state->x - turn_circle_intersec[2].x) * (state->x - turn_circle_intersec[2].x)
+		// 	+ (state->y - turn_circle_intersec[2].y) * (state->y - turn_circle_intersec[2].y)) - HI_RAD));
 		return fabs(sqrtf((state->x - turn_circle_intersec[2].x) * (state->x - turn_circle_intersec[2].x)
 			+ (state->y - turn_circle_intersec[2].y) * (state->y - turn_circle_intersec[2].y)) - HI_RAD);
 	}
 	if (nominal[6] <= 0 && nominal[7] <= 0) {  // curve if
+    // printf("%.3f\n", fabs(sqrtf((state->x - turn_circle_intersec[3].x) * (state->x - turn_circle_intersec[3].x)
+		// 	+ (state->y - turn_circle_intersec[3].y) * (state->y - turn_circle_intersec[3].y)) - IF_RAD));
 		return fabs(sqrtf((state->x - turn_circle_intersec[3].x) * (state->x - turn_circle_intersec[3].x)
 			+ (state->y - turn_circle_intersec[3].y) * (state->y - turn_circle_intersec[3].y)) - IF_RAD);
 	}
@@ -372,7 +430,7 @@ __device__ float distanceFromTrack(float* inner, float* nominal, Track* inner_fc
 		(inner_min > fabs(inner[3])) ? inner_min = fabs(inner[3]) : inner_min = inner_min;
 		return fabs(inner_min + 0.5 * ROAD_WIDTH);
 	}
-	return 0;
+	return 0.0;
 }
 
 __device__ float obstacleCollision(State* state, Obs* obstacle) {
@@ -457,22 +515,23 @@ __device__ float calculateCost(State* state, Track* outer_fcn, Track* inner_fcn,
 		nominal_fcn[7].b * state->y + nominal_fcn[7].a * state->x + nominal_fcn[7].c
 	};
 	float distance = distanceFromTrack(inner, nominal, inner_fcn, turn_circle_intersec, state);
-
+  // float distance = distanceFromTrack(inner[0], inner[1], inner[2], inner[3], inner_fcn);
 	if ((nominal[0] >= 0 && nominal[1] <= 0) || (nominal[2] >= 0 && nominal[3] >= 0) || (nominal[4] <= 0 && nominal[5] >= 0) || (nominal[6] <= 0 && nominal[7] <= 0)) {
 		if (distance > ROAD_WIDTH / 2) {
 			state_cost += OFF_ROAD_COST;
 		}
 	}
 	else {
-		if ((outer[0] > 0 && outer[1] < 0 && outer[2] < 0 && outer[3] > 0) &&
-			!(inner[0] > 0 && inner[1] < 0 && inner[2] < 0 && inner[3] > 0)) {
-			state_cost += 0;
-		}
-		else {
-			state_cost += OFF_ROAD_COST;
-		}
+    if ((outer[0] > 0 && outer[1] < 0 && outer[2] < 0 && outer[3] > 0) &&
+      !(inner[0] > 0 && inner[1] < 0 && inner[2] < 0 && inner[3] > 0)) {
+      state_cost += 0;
+    }
+    else {
+      state_cost += OFF_ROAD_COST;
+    }
 	}
 	state_cost += distance / (ROAD_WIDTH / 2) * TRACK_ERR_COST;
+  // state_cost += distance*distance/(ROAD_WIDTH*ROAD_WIDTH/4) * TRACK_ERR_COST;
 	
 	// Obstacle avoidance penalty
 
@@ -531,8 +590,19 @@ __global__ void genControlNew(uint64_t seed, Control* rand, Control* u) {
 		mean 0.0 and standard deviation 1.0, scalar: stdev scalar*/
 
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	rand[idx].vd = getRandom(seed, idx, 0) * V_RAND_SCALAR + u[threadIdx.x].vd;
-	rand[idx].wd = getRandom(seed, idx, 10) * W_RAND_SCALAR + u[threadIdx.x].wd;
+  float rand1 = getRandom(seed, idx, 0);
+  float rand2 = getRandom(seed, idx, 10);
+  if(rand1 < 0.02 && rand1 > -0.02){
+    rand1 = 0;
+  }
+  if(rand2 < 0.02 && rand2 > -0.02){
+    rand2 = 0;
+  }
+	rand[idx].vd = rand1 * V_RAND_SCALAR + u[threadIdx.x].vd;
+	rand[idx].wd = rand2 * W_RAND_SCALAR + u[threadIdx.x].wd;
+  // if(rand2==0){
+  //   printf("rand: %.3f", rand2);
+  // }
   // rand[idx].vd = 2;
   // rand[idx].wd = 1.0;
 	clampingFcn(&rand[idx],1);
@@ -543,6 +613,7 @@ __global__ void genState(State* state_list, State* init_state, Control* pert_con
     each rollout k
     - init_state is k*1 elements long (k-rollouts)
     - need to build k*n list for each prediction state
+    - genState <<< K / 256, K / 4 >>> idx is 0-1024
   */
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
   State state_temp = *init_state;
@@ -613,6 +684,10 @@ __global__ void costFcn(float* cost_list, State* state_list,
 	* i, f intersection : [x4, y4]*/
 
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  /* <<< M blocks , N threads >>>: M-> Grid size, N-> Block size */
+  // int horizon_idx = blockIdx.x;
+  // float prediction_decay = 1 - 0*horizon_idx/gridDim.x; 
+
 	float state_cost = 0.0f;
 	State state = state_list[idx];
 	
@@ -641,23 +716,34 @@ __global__ void costFcn(float* cost_list, State* state_list,
 		nominal_fcn[7].b * state.y + nominal_fcn[7].a * state.x + nominal_fcn[7].c
 	};
 	float distance = distanceFromTrack(inner, nominal, inner_fcn, turn_circle_intersec, &state);
+  // printf("%.3f\n",distance);
+  // float distance = distanceFromTrack_(inner[0], inner[1], inner[2], inner[3], inner_fcn);
 
-	if ((nominal[0] >= 0 && nominal[1] <= 0) || (nominal[2] >= 0 && nominal[3] >= 0) || (nominal[4] <= 0 && nominal[5] >= 0) || (nominal[6] <= 0 && nominal[7] <= 0)) {
-		if (distance > ROAD_WIDTH / 2) {
-			state_cost += OFF_ROAD_COST;
-		}
-	}
-	else {
-		if ((outer[0] > 0 && outer[1] < 0 && outer[2] < 0 && outer[3] > 0) &&
-			!(inner[0] > 0 && inner[1] < 0 && inner[2] < 0 && inner[3] > 0)) {
-			state_cost += 0;
-		}
-		else {
-			state_cost += OFF_ROAD_COST;
-		}
-	}
-	state_cost += distance / (ROAD_WIDTH / 2) * TRACK_ERR_COST;
-	
+	// if ((nominal[0] >= 0 && nominal[1] <= 0) || (nominal[2] >= 0 && nominal[3] >= 0) || (nominal[4] <= 0 && nominal[5] >= 0) || (nominal[6] <= 0 && nominal[7] <= 0)) {
+	// 	if (distance > ROAD_WIDTH / 2) {
+	// 		state_cost += OFF_ROAD_COST;
+	// 	}
+	// }
+	// else {
+  //   if ((outer[0] > 0 && outer[1] < 0 && outer[2] < 0 && outer[3] > 0) &&
+  //     !(inner[0] > 0 && inner[1] < 0 && inner[2] < 0 && inner[3] > 0)) {
+  //     state_cost += 0;
+  //   }
+  //   else {
+  //     state_cost += OFF_ROAD_COST;
+  //   }
+	// }
+
+  if(distance >= ROAD_WIDTH/2){
+    state_cost += OFF_ROAD_COST;
+    // distance += 0.5;
+  }
+
+	// state_cost += distance / (ROAD_WIDTH / 2) * TRACK_ERR_COST;
+  state_cost += distance*distance/(ROAD_WIDTH*ROAD_WIDTH/4) * TRACK_ERR_COST;
+    // state_cost += distance*distance* TRACK_ERR_COST*prediction_decay;
+
+	// state_cost += 1.3*distance*distance/(ROAD_WIDTH/4*ROAD_WIDTH) * TRACK_ERR_COST;
 	// Obstacle avoidance penalty
 
 	float collision = 0.0;
@@ -763,6 +849,10 @@ __global__ void min_reduction2(float* input, float* output) {
 __global__ void calcWTilde(float* w_tilde, float* rho, float* cost_list) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   w_tilde[idx] = __expf(-1/LAMBDA*(cost_list[idx]-rho[0]));
+
+  // if(threadIdx.x==0){
+  //   printf("rho=%4.2f \n", rho[0]);
+  // }
 }
 
 __global__ void genW(Control* u_opt, float* eta, float* w_tilde, Control* V) {
@@ -855,9 +945,24 @@ __global__ void PertCost(float* costList, Control* rand, Control* u) {
   //                + fabs(rand[i].wd-u[threadIdx.x].wd) / W_RAND_SCALAR * fabs(rand[i].wd-u[threadIdx.x].wd));
   // costList[i] += LAMBDA * 0.001* (fabs(u[threadIdx.x].vd) / V_RAND_SCALAR * fabs(rand[i].vd-u[threadIdx.x].vd)
   //                + (fabs(u[threadIdx.x].wd)+2) / W_RAND_SCALAR * (fabs(rand[i].wd-u[threadIdx.x].wd)));
+  // if(i<100){
+  //   printf("index: %d %d \n", i, threadIdx.x);
+  // }
+  // if(i<100){
+  //   printf("-> %.3f %.3f %.3f\n", rand[i].vd,u[threadIdx.x].vd,((u[threadIdx.x].vd) / V_RAND_SCALAR * (rand[i].vd-u[threadIdx.x].vd)
+  //                + ((u[threadIdx.x].wd)) / W_RAND_SCALAR * ((rand[i].wd-u[threadIdx.x].wd))));
+  // }
+  // costList[i] += LAMBDA * 0.0001* ((u[threadIdx.x].vd) / V_RAND_SCALAR * (rand[i].vd-u[threadIdx.x].vd)
+  //                + ((u[threadIdx.x].wd)) / W_RAND_SCALAR * ((rand[i].wd-u[threadIdx.x].wd)));    
 
-  costList[i] += LAMBDA * 0.0001* ((u[threadIdx.x].vd) / V_RAND_SCALAR * (rand[i].vd-u[threadIdx.x].vd)
-                 + ((u[threadIdx.x].wd)) / W_RAND_SCALAR * ((rand[i].wd-u[threadIdx.x].wd)));               
+  // costList[i] += LAMBDA *0.0001* fabs((u[threadIdx.x].vd) / V_RAND_SCALAR / V_RAND_SCALAR * fabs(rand[i].vd-u[threadIdx.x].vd)
+  //                + fabs((u[threadIdx.x].wd)) / W_RAND_SCALAR / W_RAND_SCALAR * fabs((rand[i].wd-u[threadIdx.x].wd)));      
+  float inv1 = 1/(W_RAND_SCALAR*W_RAND_SCALAR);
+  float inv2 = 1/(V_RAND_SCALAR*V_RAND_SCALAR);
+  costList[i] += LAMBDA * 0.001*((u[threadIdx.x].vd) * inv1 * (rand[i].vd-u[threadIdx.x].vd)
+                 + ((u[threadIdx.x].wd)) * inv2 * ((rand[i].wd-u[threadIdx.x].wd)));            
+
+
   // costList[i] += LAMBDA *0.1* (rand[i].vd / V_RAND_SCALAR * rand[i].vd
   //               + rand[i].wd / W_RAND_SCALAR * rand[i].wd;
   // costList[i] += LAMBDA * ((rand[i].vd-u[threadIdx.x].vd) * V_RAND_SCALAR * (rand[i].vd-u[threadIdx.x].vd)
@@ -1056,8 +1161,7 @@ void trackInit(){
   cudaMemcpy(dev_turn_circle_intersec, host_turn_circle_intersec, 4 * sizeof(Pos), cudaMemcpyHostToDevice);
 }
 
-
-void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int st_freq, float* cost) {
+void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int freq, float* cost, Obs* obs_pos, int obs_num){
 
   // Record runtime 
   cudaEvent_t start, stop;
@@ -1086,14 +1190,42 @@ void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int s
   //Build obstacle
   Obs* dev_obstacle;
 
-  Obs host_obstacle[] = {
-  {154 ,126.2 ,1},
-  {153 ,124.5 ,1},
-  // {152 ,120.5 ,1},
-  {128 ,87.5 ,1.0},
-  {152 ,119   ,1},
-  {134, 97, 1}
-  };
+  bool no_obs = false;
+  if(obs_num<=0){
+    obs_num = 1;
+    no_obs = true;
+  }
+  Obs host_obstacle[obs_num] = {0};
+  for(int i = 0; i < obs_num; i ++){
+    if(!no_obs){
+      Obs temp = obs_pos[i];
+      // temp.x += host_x0.x;
+      // temp.y += host_x0.y;
+      // temp.y += 3;
+      // temp.r = OBS_SIZE;
+      // temp.r = temp.r;
+      host_obstacle[i] = temp;
+    }else{
+      Obs temp = {0,0,0};
+      host_obstacle[i] = temp;
+    }
+    // std::cout<<"Obs: " <<host_obstacle[i].x<<" "<<host_obstacle[i].y<<" "<<host_obstacle[i].r<<" ("<<host_x0.x<<","<<host_x0.y<<")"<<std::endl;
+  }
+
+  // Obs host_obstacle[] = {
+  // // {154 ,126.2 ,1},
+  // // {153 ,124.5 ,1},
+  // // {152 ,120.5 ,1},
+  // {128 ,87.5 ,1.0},
+  // // {152 ,119   ,1},
+  // {134, 97, 1}
+  // };
+
+  // /* Check the influence of noise */
+  // for(int i = 0; i < 5; i ++){
+  //   host_obstacle[i].x += 3*rand()/RAND_MAX;
+  //   host_obstacle[i].y += 3*rand()/RAND_MAX;
+  // }
 
   // Obs host_obstacle[] = {
   // {128 ,87.5 ,1.0},
@@ -1105,6 +1237,7 @@ void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int s
 
   // Obs host_obstacle[] = {0};
   int NUM_OBS = sizeof(host_obstacle) / sizeof(Obs);
+  // std::cout<<"Num of obs: "<< NUM_OBS<<" = "<<obs_num<<std::endl;
 
   // Setup host memory
   host_V = (Control*)malloc(int(K * N_HRZ) * sizeof(Control));
@@ -1149,7 +1282,7 @@ void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int s
   genState << <K / 256, K / 4 >> > (dev_stateList, dev_x0, dev_V);  // Generate the states in each trajectory using the control sequences
 
   // costFcn << <int(N_HRZ) * 4, K / 4 >> > (dev_state_costList, dev_stateList, dev_out_fcn, dev_in_fcn, dev_obstacle); // Calculate the cost of all states individually
-  costFcn << <int(N_HRZ) * 4, K / 4 >> > (dev_state_costList, dev_stateList, dev_out_fcn, dev_in_fcn, dev_nominal_fcn, dev_obstacle, dev_turn_circle_intersec);
+  costFcn << <int(N_HRZ) * 4, K / 4>> > (dev_state_costList, dev_stateList, dev_out_fcn, dev_in_fcn, dev_nominal_fcn, dev_obstacle, dev_turn_circle_intersec);
   
   PertCost << <K, int(N_HRZ) >> > (dev_state_costList, dev_V, dev_U);
 
@@ -1186,7 +1319,8 @@ void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int s
   }
 
   // Generate the predicted next state with u_opt
-  for(int i=0; i<st_freq/F_STP-1; i++){
+  // for(int i=0; i<freq/F_STP-1; i++){
+  for(int i=0; i<freq/F_STP; i++){
     host_x0 = bicycleModel(host_x0, host_u_opt[0]);
   }
 

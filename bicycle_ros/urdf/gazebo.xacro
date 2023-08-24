@@ -1,4 +1,6 @@
 <?xml version="1.0" ?>
+<!-- Publishes the ground truth position from Gazebo -->
+
 <robot name="bicycle" xmlns:xacro="http://www.ros.org/wiki/xacro" >
   <gazebo>
     <plugin name="p3d_base_controller" filename="libgazebo_ros_p3d.so">

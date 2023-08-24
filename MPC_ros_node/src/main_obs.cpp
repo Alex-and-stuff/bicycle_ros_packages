@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <geometry_msgs/Twist.h>
+#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/Pose.h>
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
@@ -11,7 +13,10 @@
 #include <sensor_msgs/JointState.h>
 #include <chrono>
 
-#define T_HRZ         5.0f			    // Prediction time horizon
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
+
+#define T_HRZ         3.0f			    // Prediction time horizon
 #define F_STP         20.0f			    // Frequency of prediction (control freq)
 #define T_STP         1/F_STP			  // Period of prediction
 #define N_HRZ         T_HRZ*F_STP		// N steps in a time horizon
@@ -21,10 +26,33 @@
 #define CTRL_V        2
 #define W_MAX         1.0f
 #define W_MIN         -1.0f
-#define SCALE_MODEL   0.62f//0.68f //0.72f
+#define SCALE_MODEL   1.0f//0.68f //0.72f
 #define COST_BUFFER   100.0f
 #define DELTA_MAX     0.6f
 #define DELTA_MIN     -0.6f
+#define MAXCLUSTER    5
+
+// #define K1            30.824f
+// #define K2            11.3638f
+// #define K3            0.000637f
+// #define K1            32.4522f
+// #define K2            7.0690f
+// #define K3            -0.0207f
+
+// #define K1            32.8939f
+// #define K2            6.5065f
+// #define K3            -0.0010786f
+// #define K1            29.6212f
+// #define K2            9.1605f
+// #define K3            -0.1089f
+
+#define K1            38.9562f
+#define K2            11.3425f
+#define K3            -0.000976f
+
+// #define K1            42.3960f
+// #define K2            9.8507f
+// #define K3            -1.5682f
 
 // Self-define structures
 struct Control {
@@ -37,9 +65,12 @@ struct Track {
   // Track fcn in the form of by + ax + c =0
   float b, a, c;
 };
+struct Obs {
+  float x, y, r;
+};
 
 // Initialize functions
-void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int freq, float* cost);
+void kernelmain(Control* output_cmd, Control* host_U, State* output_state, int freq, float* cost, Obs* obs_pos, int obs_num);
 void trackInit();
 //void randomInit(int seed);
 void quaternion2RPY(sensor_msgs::Imu input, double *output);
@@ -48,11 +79,14 @@ State bicycleModelUpdate(State state, Control u);
 
 // Global variables
 nav_msgs::Odometry pos;
+// ros::Publisher markerPub;
 
 // Other params for callback fcn
 sensor_msgs::Imu imu_data;
 geometry_msgs::Twist command;
 sensor_msgs::JointState joint_state;
+Obs obs_pos[MAXCLUSTER] = {0};
+int obs_num = 0;
 
 // Setup callback function
 void odomPosCallback(const nav_msgs::Odometry::ConstPtr& msg){
@@ -68,6 +102,83 @@ void jointStateCallback(const sensor_msgs::JointState::ConstPtr& msg){
   // msg->position[1] = delta angle (steering angle response)
   joint_state = *msg;
 }
+
+void trackingObsCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
+  obs_num = msg->poses.size();
+  for(int i = 0; i < obs_num; i ++){
+    Obs obstacle = {float(msg->poses[i].position.x), float(msg->poses[i].position.y), float(msg->poses[i].position.z)};
+    obs_pos[i] = obstacle;
+  }
+}
+
+void obstacleFrameTrans(Obs* obs_pos, State &bike_state){
+  /* Transform the detected object coordinates from the "camera" frame to the "global frame"
+   * Might need to compensate tilt(theta) of phi*/
+  float x = 0;
+  float y = 0;
+  float x_i;
+  float y_i;
+  float z_i = 0;
+  float cam_base_dist = 0.7481;
+  float phi = bike_state.phi - 3.1415926/2;
+  float theta = bike_state.theta;
+  float x_b = bike_state.x;
+  float y_b = bike_state.y;
+  for(int i = 0; i < obs_num; i++){
+    x_i = obs_pos[i].x;
+    y_i = obs_pos[i].y;
+    /* Obstacle (from sensor) to global coordinates derived through HTM matrices 
+     * 1. Translation from origin to global coordinates (x_b, y_b)
+     * 2. Rotation along the z-axis to the bike frame by phi
+     * 3. Rotation along the z-axis to the sensor frame by -pi/2 
+     * 4. Translation along the y-axis to the sensor frame
+     * 5. Rotation along the y-axis by theta (roll angle of bicycle) */
+    x = cosf(phi)*cosf(theta)*x_i - sinf(phi)*y_i - cosf(phi)*sinf(theta)*z_i - sinf(phi)*cam_base_dist + x_b;
+    y = sinf(phi)*cosf(theta)*x_i + cosf(phi)*y_i - sinf(phi)*sinf(theta)*z_i + cosf(phi)*cam_base_dist + y_b;
+    obs_pos[i].x = x;
+    obs_pos[i].y = y;
+  }
+}
+
+void publishMarkers(Obs *obstacle, visualization_msgs::MarkerArray &clusterMarkers){
+  for (int i = 0; i < obs_num; i++) {
+    // std::cout<<"PUB!!! ("<<obstacle[i].x<<","<<obstacle[i].y<<")"<<std::endl;
+    visualization_msgs::Marker m;
+    m.id = i;
+    m.type = visualization_msgs::Marker::CYLINDER;
+    m.header.frame_id = "/map";
+
+    /* Resize the marker according to its decay rate */
+    m.scale.x = obstacle[i].r;
+    m.scale.y = obstacle[i].r;
+    // m.scale.x = kfPredictions[i].z;
+    // m.scale.y = kfPredictions[i].z;
+    m.scale.z = 0.3;
+    m.action = visualization_msgs::Marker::ADD;
+    m.color.a = 0.5;
+    m.color.r = 240;
+    m.color.g = 10;
+    m.color.b = 0;
+    m.pose.orientation.x = 0.0;
+    m.pose.orientation.y = 0.0;
+    m.pose.orientation.z = 0.0;
+    m.pose.orientation.w = 1.0;
+
+    m.pose.position.x = obstacle[i].x;
+    m.pose.position.y = obstacle[i].y;
+    m.pose.position.z = 0;
+
+    clusterMarkers.markers.push_back(m);
+  }
+
+  for(int i = obs_num; i < 5; i++){
+    visualization_msgs::Marker m;
+    m.id = i;
+    m.action = visualization_msgs::Marker::DELETE;
+    clusterMarkers.markers.push_back(m);
+  }
+}
+
 
 int main(int argc, char **argv)
 {
@@ -96,14 +207,16 @@ int main(int argc, char **argv)
   ros::Publisher path_pub = n.advertise<nav_msgs::Path>("/bike/trajectory",10);
   ros::Publisher mpc_path_pub = n.advertise<nav_msgs::Path>("/bike/mpc_trajectory",10);
   ros::Publisher mpc_prediction_pub = n.advertise<nav_msgs::Path>("/bike/mpc_prediction",10);
-  
+  ros::Publisher markerPub = n.advertise<visualization_msgs::MarkerArray>("/detection", 10);
+
   // Setup subscribers
   ros::Subscriber odom_sub = n.subscribe<nav_msgs::Odometry>("/bike/odom", 10, &odomPosCallback);
   ros::Subscriber joint_sub = n.subscribe<sensor_msgs::JointState>("/bike/joint_states", 10, &jointStateCallback);
   ros::Subscriber imu_sub = n.subscribe<sensor_msgs::Imu>("/bike/imu", 10, &imuCallback);
+  ros::Subscriber obs_sub = n.subscribe<geometry_msgs::PoseArray>("/obs_pos", 10, &trackingObsCallback);
   
   // Setup MPC variables
-  //State initial_state = {150.91,126.71,-1,2};
+  // State initial_state = {150.91,126.71,-1,2};
   State initial_state = {134.273,139.296,-0.65,2};
   State current_state = initial_state;
   Control output_cmd;
@@ -145,6 +258,8 @@ int main(int argc, char **argv)
         initial_state.x -= start_pos.x; 
         initial_state.y -= start_pos.y; 
         // phi_old = vehicle_output[2];
+        current_state.x =  start_pos.x;
+        current_state.y =  start_pos.y;
       }
       // Start MPC
       quaternion2RPY(imu_data, vehicle_output);
@@ -162,7 +277,7 @@ int main(int argc, char **argv)
       if(counter%1==0){
         current_state.x = pos.pose.pose.position.x; 
         current_state.y = pos.pose.pose.position.y; 
-        current_state.phi =  vehicle_output[2]; // yaw
+        current_state.phi =  vehicle_output[2]*cosf(vehicle_output[0]); // yaw
         current_state.v0 = (double)joint_state.velocity[2] * WHEEL_R;
         current_state.theta = vehicle_output[0];  // roll
         current_state.theta_dot = imu_data.angular_velocity.x;
@@ -170,13 +285,38 @@ int main(int argc, char **argv)
       }
 
       
-      
+      // Obs obs_pos_test[] = {
+      // {154 ,126.2 ,1},
+      // {153 ,124.5 ,1},
+      // // {152 ,120.5 ,1},
+      // {128 ,87.5 ,1.0},
+      // {152 ,119   ,1},
+      // {134, 97, 1}
+      // };
+      // obs_num = 5;
+
       // Run 1 MPC time horizon prediction
       auto t_start = std::chrono::steady_clock::now();
-      kernelmain(&output_cmd, host_U, &current_state, int(F_STP), &cost);
+
+      obstacleFrameTrans(obs_pos, current_state);
+
+      // std::cout<<"Phi: "<<current_state.phi<<" Theta: "<< current_state.theta<<std::endl;
+
+      kernelmain(&output_cmd, host_U, &current_state, int(F_STP), &cost, obs_pos, obs_num);
+      
+      visualization_msgs::MarkerArray clusterMarkers;
+      publishMarkers(obs_pos, clusterMarkers);
+      markerPub.publish(clusterMarkers);
+      // for(int i = 0; i < obs_num; i ++){
+      //   std::cout <<"orig Pos: ("<< current_state.x<<" "<< current_state.y<<") "<<obs_pos[i].x<<","<<obs_pos[i].y<<std::endl;
+      // }
+
       auto t_end = std::chrono::steady_clock::now();
       auto t_diff = t_end - t_start;
-      std::cout << std::chrono::duration <double, std::milli> (t_diff).count() << " ms" << std::endl;
+      // std::cout << std::chrono::duration <double, std::milli> (t_diff).count() << " ms" << std::endl;
+      // for(int i = 0; i < obs_num; i ++){
+      //   std::cout<<obs_pos[i].x<<" "<<obs_pos[i].y<<" "<<obs_pos[i].r<<std::endl;
+      // }
 
       // MPC error 
       if(output_cmd.vd == 0 && output_cmd.wd){
@@ -239,7 +379,9 @@ int main(int argc, char **argv)
         // for(int j=0;j<5;j++){
         //   state_pred = bicycleModelUpdate(state_pred, host_U[i]);
         // }
+        // std::cout<<host_U[i].wd<<" ";
       }
+      // std::cout<<std::endl;
       mpc_prediction_path.header.frame_id = "/map";
 
       // Publish topics
@@ -251,7 +393,7 @@ int main(int argc, char **argv)
       MPC_log.open("MPC_log.csv", std::ios::out | std::ios::app);
       MPC_log << simtim << " " << pos.pose.pose.position.x<< " " << pos.pose.pose.position.y << " " 
       << vehicle_output[2] << " " << (double)joint_state.velocity[2] * WHEEL_R << " " <<cmd.linear.x  << " " 
-      << cmd.angular.z << " " <<vehicle_output[0]<< " "<<(double)joint_state.position[1]<< std::endl;
+      << cmd.linear.y << " " <<vehicle_output[0]<< " "<<(double)joint_state.position[1]<<" "<<vehicle_output[0]<<" "<<imu_data.angular_velocity.x<< std::endl;
       MPC_log.close();
 
       // std::cout<<"phi: "<<vehicle_output[2]<<std::endl;
@@ -325,12 +467,14 @@ State bicycleModelUpdate(State state, Control u) {
                 0.9326, 1.0232, 0,
                 0, 0, exp(-10*state.v0/79)};
 
-  float B[3] = {0.0017, 0.0670, -79*(exp(-10*state.v0/79)-1)/200/state.v0};
+  // float B[3] = {0.0017, 0.0670, -79*(exp(-10*state.v0/79)-1)/200/state.v0};
+  float B[3] = {0.0017*state.v0, 0.0670*state.v0, -79*(exp(-10*state.v0/79)-1)/200/state.v0};
 
   // Full state feedback to compute u_bar
   float delta_d   = 1/std::sin(epsilon)*std::atan(l_b*u.wd/u.vd);
   // float K_gain[3] = {25.1229, 5.2253, 0.016359};
-  float K_gain[3] = {32.4522, 7.0690, 0.0207};
+  // float K_gain[3] = {32.4522, 7.0690, 0.0207};
+  float K_gain[3] = {K1, K2, K3};
   float x[3]      = {state.theta, state.theta_dot, state.delta};
   float x_d[3]    = {(-u.vd*u.vd*std::sin(epsilon))/(g*l_b)*delta_d, 0, delta_d};
   float u_d       = (u.vd/l_a)*delta_d*SCALE_MODEL;
@@ -394,7 +538,8 @@ State bicycleModelUpdateConti(State state, Control u) {
 
   // Full state feedback to compute u_bar
   float delta_d   = 1/std::sin(epsilon)*std::atan(l_b*u.wd/u.vd);
-  float K_gain[3] = {-32.4522, -7.0690, -0.00207};
+  // float K_gain[3] = {-32.4522, -7.0690, -0.00207};
+  float K_gain[3] = {K1, K2, K3};
   float x[3]      = {state.theta, state.theta_dot, state.delta};
   float x_d[3]    = {(-u.vd*u.vd*std::sin(epsilon))/(g*l_b)*delta_d, 0, delta_d};
   float u_d       = (u.vd/l_a)*delta_d;

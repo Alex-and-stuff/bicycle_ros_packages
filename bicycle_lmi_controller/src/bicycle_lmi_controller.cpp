@@ -93,7 +93,7 @@ int main(int argc, char** argv){
     std_msgs::Float64 vd;
     std_msgs::Float64 wd;
     vd.data = command.linear.x;
-    wd.data = command.angular.z;
+    wd.data = command.linear.y;
     
     if(command.linear.x * WHEEL_R > 1.5){
       LMIControl(imu_data, command, joint_state, vehicle_orientation, vehicle_output);
@@ -127,7 +127,7 @@ int main(int argc, char** argv){
 void LMIControl(sensor_msgs::Imu imu_data, geometry_msgs::Twist command, sensor_msgs::JointState joint_state, double* orientation, double *output){
   // Get bicycle states
   double vd = command.linear.x * WHEEL_R;
-  double wd = command.angular.z;
+  double wd = command.linear.y;
   double theta = orientation[0];
   double theta_dot = imu_data.angular_velocity.x;
   double a = imu_data.linear_acceleration.x;

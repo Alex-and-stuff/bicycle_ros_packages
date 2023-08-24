@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+  
+  <arg name="map_file" default="$(find bicycle_ros)/map/nthu_world_rounded.yaml"/>
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
+  
+  <!-- TF Transform Robot To Map -->
+  <!--<node pkg="tf" type="static_transform_publisher" name="tf" args="0 0 0 0 0 0 bike/base_link map 50"/>-->
+  <!--<node pkg="tf" type="static_transform_publisher" name="tf2" args="0 0 0 0 0 0 map /bike/odom 50"/>-->
+  <node pkg="tf" type="static_transform_publisher" name="tf22" args="0 0 0 0 0 0 /odommm /bike/base_link 5"/>
+<!--  <node pkg="tf" type="static_transform_publisher" name="marker_to_bike_tf" args="1 0 0 0 0 0 /bike/base_link /base_link 5"/>-->
+  <node pkg="tf" type="static_transform_publisher" name="marker_to_bike_tf" args="0.7481 0 0 -1.57079 0 0 /bike/base_link ti_mmwave_0 5"/>
+  
+  
+  <!-- mmwave tracking -->
+<!--  <node pkg="multi_object_tracking_lidar" type="kf_tracker" name="kf_tracker" output="screen" />-->
+  
+  <!-- Launch lmi -->
+  <node pkg="bicycle_lmi_controller" type="bicycle_lmi_controller" name="bicycle_lmi_controller" output= "screen" >
+    <param name="command_topic_name" value="/cmd_vel"/>
+    <param name="imu_topic_name" value="/bike/imu"/>
+    <param name="joint_topic_name" value="/bike/joint_states"/>
+    
+<!--    <param name="K1" value="30.0581" /> -->
+<!--    <param name="K2" value="6.1197" />-->
+<!--    <param name="K3" value="0.01" />-->
+<!--    <param name="K1" value="30.924" /> -->
+<!--    <param name="K2" value="11.3638" />-->
+<!--    <param name="K3" value="0.000637" />-->
+<!--    <param name="K1" value="32.4522" /> -->
+<!--    <param name="K2" value="7.0690" />-->
+<!--    <param name="K3" value="-0.0207" />-->
+
+<!--    <param name="K1" value="32.8939" /> -->
+<!--    <param name="K2" value="6.5065" />-->
+<!--    <param name="K3" value="-0.0010786" />-->
+
+    <param name="K1" value="38.9562" /> 
+    <param name="K2" value="11.3425" />
+    <param name="K3" value="-0.000976" />
+    
+<!--    <param name="K1" value="42.3960" /> -->
+<!--    <param name="K2" value="9.8507" />-->
+<!--    <param name="K3" value="-1.5682" />-->
+    
+    <param name="Ka" value="2.54" />
+    <param name="DELTA_DIFF" value="0.04" />
+    <param name="W_DIFF" value="5" />
+    <param name="THETA_COMP_DIFF" value="100" />
+    
+  </node>
+  
+  
+  <!-- Launch Gazebo -->
+  <!--arg name="world" default="$(find bicycle_ros)/world/square_world.world"/-->
+  <arg name="world" default="$(find bicycle_ros)/world/my_world.world"/>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+    <arg name="world_name" value="$(arg world)" />
+  </include>
+  
+  
+    
+  <!-- Place Model Into World With Namespace "bike" -->
+  <group ns="/bike">
+    <!-- IMPORTANT to add tf prefix -->
+    <param name="tf_prefix" value="/bike" />
+    
+    <!-- Set Arguments -->
+    <arg name="x" default="134.273"/>
+    <arg name="y" default="139.296"/>
+    <arg name="z" default="0.6"/>
+    <arg name="Y" default="-0.65"/>
+    <!--arg name="Y" default="0.0"/-->
+    
+    <!-- Robot Model -->
+    <param name="robot_description" command="$(find xacro)/xacro $(find bicycle_ros)/urdf/bicycle.xacro ns:=/bike"/>
+    
+    <!-- Spawn Robot Model -->
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" output="screen" args="-param robot_description -urdf -model bicycle 
+                -x $(arg x) -y $(arg y) -z $(arg z) -Y $(arg Y)" />        
+    
+    <!-- Load Controllers -->
+    <rosparam file="$(find bicycle_ros)/config/controller2.yaml" command="load"/>
+
+    <!-- Controllers -->
+    <node name="controller_spawner" pkg="controller_manager" type="spawner"
+      respawn="false" output="screen" ns="/bike" args="--namespace=/bike 
+      joint_state_controller
+      front_fork_controller  
+      back_wheel_controller
+      --timeout 60">
+    </node>    
+    
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
+      <remap from="/joint_states" to="/bike/joint_states"/>
+      <param name="publish_rate" type="double" value="200.0" />
+      <param name="tf_prefix" value="/bike" />
+    </node>
+    
+  </group>
+  
+  <!--
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/>
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+  <arg name="model" default="$(find bicycle_ros)/urdf/bicycle.xacro "/>
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)"/>-->
+  
+  <node pkg="odometry_tf" type="odometry_tf" name="odometry_tf" output= "screen" >
+    <param name="odometry_topic_name" value="/bike/odom"/>
+    <param name="frame_id" value="/map"/>
+    <param name="child_frame_id" value="/odommm"/>
+  </node>
+  
+  
+  
+  <arg name="rvizconfig" default="$(find bicycle_ros)/launch/sim_pc.rviz"/>
+  <node name="rviz" pkg="rviz" args="-d $(arg rvizconfig)" type="rviz" required="true"/>
+</launch>

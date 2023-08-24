@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     // Raise velocity to speed limit before starting MPC control
     if(counter < SPEEDUP_P){
       cmd.linear.x = v_no_control;
-      cmd.angular.z = 0;
+      cmd.linear.y = 0;
       cmd_pub.publish(cmd);
       if(v_no_control<CTRL_V){
         v_no_control += double(CTRL_V)/double(SPEEDUP_P);
@@ -110,19 +110,33 @@ int main(int argc, char **argv)
     }
     else{
       // Generate the command
+      if(counter_control == 1){std::cout<<"Go strait!!"<<std::endl;}
       if(counter_control<2){
         output_cmd.vd = 2;
         output_cmd.wd = 0;
       }
+      if(counter_control == 2){std::cout<<"Turn!!"<<std::endl;}
       if(counter_control>2 && counter_control<4){
         output_cmd.vd = 2;
         output_cmd.wd = 0.5;
       }
+      if(counter_control == 4){std::cout<<"Speed increase, Turn!!"<<std::endl;}
       if(counter_control>4 && counter_control<6){
         output_cmd.vd += 0.01;
-        output_cmd.wd -= 0.005;
+        output_cmd.wd -= 0.0075;
       }
-      if(counter_control>7){
+      if(counter_control == 6){std::cout<<"Stop!!"<<std::endl;}
+      if(counter_control>6&& counter_control<8){
+        output_cmd.vd = 2.0;
+        output_cmd.wd = 0.0;
+      }
+      // if(counter_control == 7){std::cout<<"Stop!!"<<std::endl;}
+      // if(counter_control>7&& counter_control<8){
+      //   output_cmd.vd = 0.0;
+      //   output_cmd.wd = 0.0;
+      // }
+      if(counter_control == 8){std::cout<<"Stop!!"<<std::endl;}
+      if(counter_control>8){
         output_cmd.vd = 0.0;
         output_cmd.wd = 0.0;
       }
@@ -131,7 +145,7 @@ int main(int argc, char **argv)
       
       // Publish optimal command calculated by MPC
       cmd.linear.x = output_cmd.vd;
-      cmd.angular.z = output_cmd.wd;
+      cmd.linear.y = output_cmd.wd;
       cmd_pub.publish(cmd);
       
       // Store ground truth position to trajectory
@@ -149,7 +163,7 @@ int main(int argc, char **argv)
       MPC_log.open("controller_exp_log.csv", std::ios::out | std::ios::app);
       MPC_log << simtim << " " << pos.pose.pose.position.x<< " " << pos.pose.pose.position.y << " " 
       << vehicle_output[2] << " " << (double)joint_state.velocity[2] * WHEEL_R << " " <<cmd.linear.x  << " " 
-      << cmd.angular.z << " " <<vehicle_output[0]<< " "<<(double)joint_state.position[1]<< std::endl;
+      << cmd.linear.y << " " <<vehicle_output[0]<< " "<<(double)joint_state.position[1]<< std::endl;
       MPC_log.close();
       
       counter_control += 0.01;
