@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="px4_viz" type="px4_viz" name="px4_viz_node" output= "screen" />
+</launch>

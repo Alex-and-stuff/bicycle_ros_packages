@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="px4_ekf" type="px4_ekf" name="px4_ekf_node" output= "screen" >
+  <param name="INIT_X" value="77.0" /> 
+  <param name="INIT_Y" value="-3.0" /> 
+  <param name="INIT_PHI" value="2.7" /> 
+</node>
+  <arg name="rvizconfig" default="$(find px4_ekf)/launch/urdf.rviz"/>
+  <node name="rviz" pkg="rviz" args="-d $(arg rvizconfig)" type="rviz" required="true"/>
+</launch>

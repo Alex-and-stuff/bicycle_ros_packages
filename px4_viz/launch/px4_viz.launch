@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="px4_viz" type="px4_viz" name="px4_viz_node" output= "screen" />
+  <arg name="rvizconfig" default="$(find px4_viz)/launch/urdf.rviz"/>
+  <node name="rviz" pkg="rviz" args="-d $(arg rvizconfig)" type="rviz" required="true"/>
+</launch>
